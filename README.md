@@ -104,16 +104,3 @@ cd node-easy-notes-app
 npm install
 node server.js
 ```
-
-### Test Endpoints in PowerShell (Single Command)
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/notes" -Method POST -ContentType "application/json" -Body '{"title":"My Note","content":"Hello World","tags":["work"]}'; Invoke-RestMethod -Uri "http://localhost:3000/notes" -Method GET; Invoke-RestMethod -Uri "http://localhost:3000/notes/search?q=Hello" -Method GET; Invoke-RestMethod -Uri "http://localhost:3000/notes?tags=work" -Method GET
-```
-
----
-
-## 🎥 Screen Recording Demonstration
-
-A 2-3 minute screen recording demonstrating the agent exploring, planning, modifying, and testing the application:
-
-👉 **[Google Drive Video Link Placeholder]** *(Paste your Google Drive link here)*
