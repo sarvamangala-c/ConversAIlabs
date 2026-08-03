@@ -110,6 +110,29 @@ exports.delete = (req, res) => {
     });
 };
 
+// Return statistics about stored notes
+exports.stats = (req, res) => {
+    memoryStore.findAll()
+    .then(notes => {
+        const tagCounts = {};
+        notes.forEach(note => {
+            (note.tags || []).forEach(tag => {
+                tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+            });
+        });
+
+        res.send({
+            totalNotes: notes.length,
+            tagBreakdown: tagCounts,
+            generatedAt: new Date()
+        });
+    }).catch(err => {
+        res.status(500).send({
+            message: err.message || "Error generating stats."
+        });
+    });
+};
+
 // Search notes by title, content, or tags
 exports.search = (req, res) => {
     const searchTerm = req.query.q;
