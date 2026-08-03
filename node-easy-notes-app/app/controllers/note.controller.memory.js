@@ -110,6 +110,42 @@ exports.delete = (req, res) => {
     });
 };
 
+// Pin a note
+exports.pin = (req, res) => {
+    memoryStore.findByIdAndUpdate(req.params.noteId, { pinned: true })
+    .then(note => {
+        if (!note) {
+            return res.status(404).send({ message: "Note not found with id " + req.params.noteId });
+        }
+        res.send(note);
+    }).catch(err => {
+        res.status(500).send({ message: "Error pinning note with id " + req.params.noteId });
+    });
+};
+
+// Unpin a note
+exports.unpin = (req, res) => {
+    memoryStore.findByIdAndUpdate(req.params.noteId, { pinned: false })
+    .then(note => {
+        if (!note) {
+            return res.status(404).send({ message: "Note not found with id " + req.params.noteId });
+        }
+        res.send(note);
+    }).catch(err => {
+        res.status(500).send({ message: "Error unpinning note with id " + req.params.noteId });
+    });
+};
+
+// Get all pinned notes
+exports.pinned = (req, res) => {
+    memoryStore.findPinned()
+    .then(notes => {
+        res.send(notes);
+    }).catch(err => {
+        res.status(500).send({ message: err.message || "Error retrieving pinned notes." });
+    });
+};
+
 // Return a quick count of all notes
 exports.count = (req, res) => {
     memoryStore.findAll()

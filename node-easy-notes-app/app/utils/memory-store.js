@@ -11,6 +11,7 @@ class MemoryStore {
             title: noteData.title || "Untitled Note",
             content: noteData.content,
             tags: noteData.tags || [],
+            pinned: false,
             createdAt: new Date(),
             updatedAt: new Date()
         };
@@ -46,6 +47,7 @@ class MemoryStore {
             title: updateData.title || this.notes[index].title,
             content: updateData.content || this.notes[index].content,
             tags: updateData.tags !== undefined ? updateData.tags : this.notes[index].tags,
+            pinned: updateData.pinned !== undefined ? updateData.pinned : this.notes[index].pinned,
             updatedAt: new Date()
         };
         
@@ -58,6 +60,10 @@ class MemoryStore {
         
         const removed = this.notes.splice(index, 1)[0];
         return removed;
+    }
+
+    async findPinned() {
+        return this.notes.filter(note => note.pinned === true);
     }
 
     async search(searchTerm) {

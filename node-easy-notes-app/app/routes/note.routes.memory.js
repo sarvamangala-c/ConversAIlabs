@@ -13,6 +13,9 @@ module.exports = (app) => {
     // Notes statistics
     app.get('/notes/stats', notes.stats);
 
+    // Pinned notes
+    app.get('/notes/pinned', notes.pinned);
+
     // Search Notes
     app.get('/notes/search', notes.search);
 
@@ -21,6 +24,10 @@ module.exports = (app) => {
 
     // Update a Note with noteId
     app.put('/notes/:noteId', notes.update);
+
+    // Pin / Unpin a Note
+    app.patch('/notes/:noteId/pin', notes.pin);
+    app.patch('/notes/:noteId/unpin', notes.unpin);
 
     // Delete a Note with noteId
     app.delete('/notes/:noteId', notes.delete);
