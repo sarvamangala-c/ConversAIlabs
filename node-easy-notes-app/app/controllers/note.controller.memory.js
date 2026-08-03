@@ -110,6 +110,16 @@ exports.delete = (req, res) => {
     });
 };
 
+// Return a quick count of all notes
+exports.count = (req, res) => {
+    memoryStore.findAll()
+    .then(notes => {
+        res.send({ count: notes.length });
+    }).catch(err => {
+        res.status(500).send({ message: err.message || "Error counting notes." });
+    });
+};
+
 // Return statistics about stored notes
 exports.stats = (req, res) => {
     memoryStore.findAll()
