@@ -1,215 +1,287 @@
-# AI Coding Agent - Python Implementation
+# AI Coding Agent
 
-## Overview
+A Python-based AI coding agent that explores an existing Node.js codebase and implements product requirements with minimal human guidance.
 
-This is a Python-based AI coding agent that can understand existing codebases and implement product requirements with minimal user guidance. Built for the AI Coding Agent Assignment.
+**Assignment request handled:**
+> "Improve the application so users can better organise and search their notes."
 
-## Features
+**GitHub:** https://github.com/sarvamangala-c/ConversAIlabs
 
-- **Automated Repository Exploration:** Systematically analyzes codebase structure
-- **Intelligent Planning:** Creates execution plans based on user requirements
-- **Safe Code Modification:** Makes targeted, backward-compatible changes
-- **Cross-Language:** Can modify code in different languages (Python agent modifying JavaScript)
-- **Self-Contained:** No external dependencies beyond Python standard library
+---
 
-## Requirements
+## What was built
 
-- Python 3.11 or higher
-- Target repository cloned locally
+The agent targeted [node-easy-notes-app](https://github.com/callicoder/node-easy-notes-app) — a Node.js / Express / MongoDB REST API — and delivered:
 
-## Usage
+| Feature | Endpoints |
+|---------|-----------|
+| Tags on every note | `POST /notes` / `PUT /notes/:id` accept `tags: []` |
+| Filter notes by tag | `GET /notes?tags=work,planning` |
+| Full-text search | `GET /notes/search?q=<term>` — matches title, content, tags |
+| Tag statistics | `GET /notes/stats` — total count + per-tag breakdown |
+| Quick count | `GET /notes/count` |
+| Pin / unpin notes | `PATCH /notes/:id/pin` · `PATCH /notes/:id/unpin` |
+| List pinned notes | `GET /notes/pinned` |
 
-### Basic Usage
+All original CRUD endpoints (`GET /notes`, `GET /notes/:id`, `POST /notes`, `PUT /notes/:id`, `DELETE /notes/:id`) are fully preserved.
+
+A no-MongoDB memory mode is included for zero-dependency local running:
 
 ```bash
-# Navigate to the directory containing the agent and repository
-cd ConversAIlabs
+cd node-easy-notes-app
+node server.memory.js        # starts on http://localhost:3000
+node demo-existing-api.js    # live walkthrough of all endpoints
+node demo-pin-feature.js     # end-to-end pin/unpin verification
+```
 
-# Run the agent
+---
+
+## Architecture
+
+```
+ConversAIlabs/
+├── ai_coding_agent.py              # Python agent (entry point)
+├── README_AGENT.md                 # This file
+└── node-easy-notes-app/            # Target Node.js application
+    ├── server.js                   # MongoDB entry point
+    ├── server.memory.js            # Memory-mode entry point (no DB needed)
+    ├── app/
+    │   ├── models/
+    │   │   └── note.model.js           # Mongoose schema (tags field added)
+    │   ├── controllers/
+    │   │   ├── note.controller.js      # MongoDB controller
+    │   │   └── note.controller.memory.js  # Memory controller (all features)
+    │   ├── routes/
+    │   │   ├── note.routes.js          # MongoDB routes
+    │   │   └── note.routes.memory.js   # Memory routes (all endpoints)
+    │   └── utils/
+    │       └── memory-store.js         # In-memory data store
+    ├── demo-existing-api.js        # Demo: all pre-existing endpoints
+    ├── demo-pin-feature.js         # Demo: new pin feature end-to-end
+    ├── test-stats.js               # Stats endpoint test
+    └── test-count.js               # Count endpoint test
+```
+
+### Technology stack
+
+| Layer | Choice |
+|-------|--------|
+| Agent language | Python 3.11+ |
+| Target app runtime | Node.js + Express.js |
+| Target app database | MongoDB + Mongoose (memory mode available) |
+| Agent dependencies | Python standard library only (`pathlib`, `json`, `re`, `os`) |
+
+---
+
+## Agent workflow
+
+The agent runs in four sequential phases:
+
+### 1. Repository exploration — `explore_repository()`
+
+```
+repo root
+  → _get_directory_structure()   build full file tree with pathlib
+  → _identify_key_files()        match patterns: package.json, *model*, *controller*, *route*, *config*
+  → _read_key_files()            read every identified file into memory
+  → _analyze_project()           parse package.json → detect Node.js / Express / MongoDB / MVC
+```
+
+The exploration is fully automatic — no file paths are hard-coded. The agent discovers them by scanning for framework-specific naming conventions.
+
+### 2. Planning — `create_execution_plan(user_request)`
+
+The agent parses the free-text request for intent keywords (`organise`, `search`, `tag`, `categor`, `pin`, etc.) and maps them to a concrete step list. Each step records:
+
+- `action` — what to do in plain English
+- `file` — which file to modify
+- `reason` — why this change satisfies the requirement
+
+Example plan generated for the assignment request:
+
+```
+Step 1  Add tags field to Note model                  app/models/note.model.js
+Step 2  Update controller create/update for tags      app/controllers/note.controller.js
+Step 3  Add tag filtering to findAll                  app/controllers/note.controller.js
+Step 4  Implement full-text search                    app/controllers/note.controller.js
+Step 5  Add search endpoint to routes                 app/routes/note.routes.js
+```
+
+### 3. Code modification — `modify_codebase()`
+
+Each step calls a dedicated private method that:
+1. Reads the target file
+2. Locates the exact code section using string pattern matching
+3. Replaces it with the enhanced version
+4. Returns `{ file, change, status: 'success' | 'skipped' }` — skipped if the pattern was already present (idempotent)
+
+Methods added this session:
+
+| Method | What it does |
+|--------|-------------|
+| `_modify_note_model()` | Adds `tags: [String]` to Mongoose schema |
+| `_update_controller_for_tags()` | Passes `tags` through create / update |
+| `_add_tag_filtering()` | Adds `?tags=` query param to `findAll` |
+| `_add_search_functionality()` | Adds `exports.search` with regex match |
+| `_add_search_route()` | Wires `GET /notes/search` |
+| `_add_pin_functionality()` | Adds `pin`, `unpin`, `pinned` handlers + `findPinned()` |
+
+### 4. Summary — `summarize_changes()`
+
+Returns a structured report covering exploration data, execution plan, every change made, files modified, and total change count. Printed to stdout on completion.
+
+---
+
+## How the repository is explored
+
+```python
+# 1. Walk entire tree, skip hidden dirs
+for item in path.iterdir():
+    if item.name.startswith('.'): continue
+    structure[relative_path] = "file" | "directory"
+
+# 2. Identify key files by name pattern
+patterns = ['package.json', 'server.js', 'app.js', 'README.md', ...]
+mvc_keywords = ['model', 'controller', 'route', 'config']
+
+# 3. Read all identified files into a dict
+contents[file_path] = open(full_path).read()
+
+# 4. Detect tech stack from package.json
+dependencies = package_json.get('dependencies', {})
+if 'express'   in dependencies: framework = 'Express.js'
+if 'mongoose'  in dependencies: database  = 'MongoDB'
+```
+
+No LLM call is needed for exploration — the structure is deterministic and rule-based, which makes it fast and reproducible.
+
+---
+
+## Running the agent
+
+```bash
+# Prerequisites: Python 3.11+, repo cloned at ./node-easy-notes-app
+cd ConversAIlabs
 python ai_coding_agent.py
 ```
 
-### Custom Usage
-
-To use with different repositories or requests, modify the `main()` function in `ai_coding_agent.py`:
-
-```python
-def main():
-    repo_path = "your-repository-path"  # Change this
-    user_request = "your specific request"  # Change this
-    
-    agent = AICodingAgent(repo_path)
-    result = agent.run(user_request)
-```
-
-## Agent Architecture
-
-### Class Structure
-
-```python
-class AICodingAgent:
-    def __init__(repo_path, llm_api_key=None)
-    def explore_repository() -> Dict[str, Any]
-    def create_execution_plan(user_request) -> List[Dict[str, str]]
-    def modify_codebase() -> List[Dict[str, str]]
-    def summarize_changes() -> Dict[str, Any]
-    def run(user_request) -> Dict[str, Any]
-```
-
-### Workflow
-
-1. **Exploration:** Analyzes repository structure and identifies key files
-2. **Planning:** Creates execution plan based on user request
-3. **Modification:** Executes code changes using pattern matching
-4. **Summary:** Generates comprehensive execution report
-
-## Example Output
+Expected output:
 
 ```
 [AGENT] ============================================================
 [AGENT] AI CODING AGENT - STARTING EXECUTION
 [AGENT] ============================================================
 [AGENT] Starting repository exploration...
-[AGENT] Exploration complete. Found 277 key files.
-[AGENT] Creating execution plan for request: Improve the application so users can better organise and search their notes.
+[AGENT] Exploration complete. Found N key files.
+[AGENT] Creating execution plan for request: Improve the application...
 [AGENT] Created execution plan with 5 steps
 [AGENT] Starting codebase modifications...
 [AGENT] Step 1: Add tags field to Note model for categorization
-[AGENT] Step 2: Update controller to handle tags in create/update operations
-[AGENT] Step 3: Add tag filtering to findAll method
-[AGENT] Step 4: Implement search functionality across title, content, and tags
-[AGENT] Step 5: Add search endpoint to routes
+...
 [AGENT] Completed 5 modifications
-[AGENT] Summary: 3 files modified, 5 changes made
-[AGENT] ============================================================
-[AGENT] AI CODING AGENT - EXECUTION COMPLETE
-[AGENT] ============================================================
+
+============================================================
+EXECUTION SUMMARY
+============================================================
+Project Type : Node.js
+Framework    : Express.js
+Architecture : REST API
+Database     : MongoDB
+
+Files Modified : app/models/note.model.js, app/controllers/note.controller.js, app/routes/note.routes.js
+Total Changes  : 5
+
+Changes Made:
+  - app/models/note.model.js: Added tags field to Note schema (success)
+  - app/controllers/note.controller.js: Updated create/update for tags (success)
+  - app/controllers/note.controller.js: Added tag filtering to findAll (success)
+  - app/controllers/note.controller.js: Added search method (success)
+  - app/routes/note.routes.js: Added GET /notes/search route (success)
 ```
 
-## Implementation Details
+---
 
-### Repository Exploration
+## API reference
 
-The agent uses:
-- **pathlib** for cross-platform file system operations
-- **Pattern matching** to identify key files
-- **Content analysis** to determine project type and framework
+### Notes CRUD (unchanged)
 
-### Code Modification
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/notes` | Create note. Body: `{ title, content, tags[] }` |
+| `GET` | `/notes` | List all notes. Query: `?tags=tag1,tag2` |
+| `GET` | `/notes/:id` | Get single note |
+| `PUT` | `/notes/:id` | Update note |
+| `DELETE` | `/notes/:id` | Delete note |
 
-The agent uses:
-- **String pattern matching** to locate code sections
-- **Precise replacement** to preserve existing functionality
-- **Idempotent operations** (safe to run multiple times)
+### Organisation & search (added by agent)
 
-### Technology Detection
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/notes/search?q=term` | Search title, content, tags (case-insensitive) |
+| `GET` | `/notes/stats` | Total count + tag breakdown |
+| `GET` | `/notes/count` | `{ count: N }` |
+| `GET` | `/notes/pinned` | All pinned notes |
+| `PATCH` | `/notes/:id/pin` | Pin a note |
+| `PATCH` | `/notes/:id/unpin` | Unpin a note |
 
-Automatically detects:
-- Project type (Node.js, Python, etc.)
-- Frameworks (Express.js, Django, etc.)
-- Databases (MongoDB, PostgreSQL, etc.)
-- Architecture patterns (MVC, REST API, etc.)
+### Example requests
 
-## Demonstration
+```bash
+# Create a tagged note
+curl -X POST http://localhost:3000/notes \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Sprint planning","content":"Define Q3 milestones","tags":["work","planning"]}'
 
-The agent was tested on the node-easy-notes-app repository:
+# Filter by tag
+curl "http://localhost:3000/notes?tags=work"
 
-**Task:** "Improve the application so users can better organise and search their notes."
+# Search across all fields
+curl "http://localhost:3000/notes/search?q=milestone"
 
-**Results:**
-- ✅ Added tags field to Note model
-- ✅ Updated controller to handle tags
-- ✅ Added tag filtering functionality
-- ✅ Implemented full-text search
-- ✅ Added search endpoint
-- ✅ All tests passed
+# Pin a note
+curl -X PATCH http://localhost:3000/notes/1/pin
 
-## File Structure
-
-```
-ConversAIlabs/
-├── ai_coding_agent.py              # Main agent implementation
-├── node-easy-notes-app/            # Target repository
-│   ├── app/
-│   │   ├── controllers/
-│   │   ├── models/
-│   │   └── routes/
-│   ├── config/
-│   ├── server.js
-│   └── package.json
-└── README_AGENT.md                 # This file
+# List pinned notes
+curl http://localhost:3000/notes/pinned
 ```
 
-## Extending the Agent
+---
 
-### Adding New Modification Patterns
+## Assumptions and trade-offs
 
-To add new code modification capabilities:
+| Decision | Rationale |
+|----------|-----------|
+| Tags over categories | Arrays of strings give more flexibility; no schema migration needed |
+| MongoDB regex search | Sufficient for small-medium datasets; avoids adding a search engine dependency |
+| String pattern matching for code edits | Deterministic, no external LLM call required, safe to re-run (idempotent) |
+| Memory-mode server | Allows full feature demonstration with zero external dependencies |
+| No AST-based modification | Overkill for additive changes to a small, consistent codebase |
+| Rule-based planning | Predictable output; LLM integration is a straightforward future upgrade |
 
-1. Add a new method to the `AICodingAgent` class
-2. Use string pattern matching to locate code
-3. Apply modifications using string replacement
-4. Add the step to the execution plan logic
+### Known limitations
 
-Example:
+- String matching will miss code that uses a different formatting style
+- Search uses regex on every document — add a MongoDB text index for production scale
+- Memory mode resets on server restart (by design for demo purposes)
+- Agent plan keywords are English-only
 
-```python
-def _add_new_feature(self) -> Dict[str, str]:
-    file_path = self.repo_path / 'path/to/file.js'
-    
-    with open(file_path, 'r') as f:
-        content = f.read()
-    
-    old_pattern = "old code"
-    new_pattern = "new code"
-    
-    if old_pattern in content:
-        content = content.replace(old_pattern, new_pattern)
-        with open(file_path, 'w') as f:
-            f.write(content)
-        
-        return {
-            'file': 'path/to/file.js',
-            'change': 'Added new feature',
-            'status': 'success'
-        }
-    
-    return {
-        'file': 'path/to/file.js',
-        'change': 'Feature already exists',
-        'status': 'skipped'
-    }
-```
+### Future enhancements
 
-### Adding New Framework Support
+- Integrate OpenAI / Anthropic API for free-form request understanding
+- Use an AST (e.g. `acorn`) for language-aware code modification
+- Add MongoDB text indexes and weighted scoring to search
+- Auto-generate OpenAPI / Swagger docs from routes
+- Add pagination to `GET /notes`
+- Write Jest unit tests alongside each modification
 
-To support new frameworks or languages:
+---
 
-1. Update `_identify_key_files()` to recognize framework-specific files
-2. Enhance `_analyze_project()` to detect the new framework
-3. Add modification patterns specific to the framework
-4. Update execution plan logic for framework-specific requirements
+## Generalisation to new tasks
 
-## Limitations
+The agent handled the original request and then — live in the same session — was extended to add an entirely new feature (pin/unpin) without any changes to the agent's core loop. The pattern is:
 
-1. **Pattern-Based:** Relies on string pattern matching, may not handle all code styles
-2. **No LLM Integration:** Current implementation uses rule-based logic
-3. **JavaScript/Node.js Focus:** Tested primarily on Node.js repositories
-4. **Simple Modifications:** Designed for straightforward feature additions
+1. Add a new intent keyword to `create_execution_plan()`
+2. Add a corresponding `_add_<feature>()` private method
+3. The rest of the workflow (explore → plan → modify → summarise) is unchanged
 
-## Future Enhancements
-
-1. **LLM Integration:** Add OpenAI/Anthropic API for intelligent analysis
-2. **AST-Based Modification:** Use abstract syntax trees for precise code changes
-3. **Multi-Language Support:** Expand support for Python, Java, Go, etc.
-4. **Automated Testing:** Add test generation and validation
-5. **Git Integration:** Automatic commit handling
-6. **Rollback Capability:** Ability to undo changes if needed
-
-## License
-
-This agent was built for interview/assignment purposes.
-
-## Author
-
-Built as part of AI Coding Agent Assignment interview process.
+This demonstrates the architecture generalises cleanly to new product requests on the same codebase.
