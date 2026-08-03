@@ -7,6 +7,9 @@ module.exports = (app) => {
     // Retrieve all Notes
     app.get('/notes', notes.findAll);
 
+    // Notes statistics
+    app.get('/notes/stats', notes.stats);
+
     // Search Notes
     app.get('/notes/search', notes.search);
 
